@@ -6,13 +6,8 @@ metadata:
   openclaw:
     emoji: "📊"
     requires:
-      env:
-        - ANTHROPIC_API_KEY
-        - ANTHROPIC_BASE_URL
-        - ANTHROPIC_MODEL
       bins:
         - python3
-    primaryEnv: ANTHROPIC_API_KEY
     install:
       - id: script
         kind: command

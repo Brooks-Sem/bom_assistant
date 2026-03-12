@@ -20,35 +20,4 @@ if [ ! -f ".env" ]; then
     echo "    vi $SCRIPT_DIR/.env"
 fi
 
-# 注册 MCP 到 OpenClaw
-OPENCLAW_CONFIG="$HOME/.openclaw/openclaw.json"
-PYTHON_PATH="$SCRIPT_DIR/.venv/bin/python"
-SERVER_PATH="$SCRIPT_DIR/server.py"
-
-if [ -f "$OPENCLAW_CONFIG" ]; then
-    if python3 -c "
-import json, sys
-with open('$OPENCLAW_CONFIG') as f:
-    cfg = json.load(f)
-servers = cfg.get('mcpServers', {})
-if 'bom-assistant' not in servers:
-    servers['bom-assistant'] = {
-        'command': '$PYTHON_PATH',
-        'args': ['$SERVER_PATH']
-    }
-    cfg['mcpServers'] = servers
-    with open('$OPENCLAW_CONFIG', 'w') as f:
-        json.dump(cfg, f, indent=2, ensure_ascii=False)
-    print('OK')
-else:
-    print('EXIST')
-"; then
-        echo "[*] MCP 已注册到 OpenClaw"
-    fi
-else
-    mkdir -p "$(dirname "$OPENCLAW_CONFIG")"
-    echo "{\"mcpServers\":{\"bom-assistant\":{\"command\":\"$PYTHON_PATH\",\"args\":[\"$SERVER_PATH\"]}}}" | python3 -m json.tool > "$OPENCLAW_CONFIG"
-    echo "[*] 已创建 OpenClaw 配置并注册 MCP"
-fi
-
 echo "[*] 安装完成。请确保 .env 已配置，然后重启 OpenClaw。"
