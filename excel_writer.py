@@ -1,3 +1,4 @@
+import re
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -30,18 +31,39 @@ FIELD_KEYS = [
     "shipment_date",
 ]
 
+_FS_INVALID_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
+_MULTI_UNDERSCORE = re.compile(r"_+")
+
+
+def _sanitize_segment(value: str, fallback: str = "unknown") -> str:
+    cleaned = _FS_INVALID_CHARS.sub("_", (value or "").strip())
+    cleaned = re.sub(r"\s+", "_", cleaned)
+    cleaned = cleaned.rstrip(" .")
+    cleaned = _MULTI_UNDERSCORE.sub("_", cleaned).strip("_")
+    if not cleaned:
+        cleaned = _MULTI_UNDERSCORE.sub("_", _FS_INVALID_CHARS.sub("_", fallback).strip("_. ")) or "unknown"
+    return cleaned[:80]
+
 
 def _build_output_name(source_file: str) -> str:
-    stem = Path(source_file).stem
+    stem = _sanitize_segment(Path(source_file).stem, fallback="bom")
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
     return f"admin_template_{stem}_{ts}.xlsx"
 
 
-def write_admin_template(rows: list[dict], source_file: str, output_dir: str = "output") -> str:
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
+def write_admin_template(
+    rows: list[dict],
+    source_file: str,
+    output_dir: str = "output",
+    company_name: str = "",
+) -> str:
+    month = datetime.now().strftime("%Y-%m")
+    company_seg = _sanitize_segment(company_name, fallback=Path(source_file).stem or "unknown")
+    target_dir = Path(output_dir) / month / company_seg
+    target_dir.mkdir(parents=True, exist_ok=True)
 
     output_name = _build_output_name(source_file)
-    output_path = str(Path(output_dir) / output_name)
+    output_path = str(target_dir / output_name)
     shutil.copy2(str(TEMPLATE_PATH), output_path)
 
     wb = load_workbook(output_path)

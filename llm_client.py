@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from datetime import date
 
 import anthropic
@@ -28,6 +29,18 @@ log = logging.getLogger(__name__)
 MODEL_NAME = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
 BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
 
+
+def _env_int(name: str, default: int) -> int:
+    raw = (os.getenv(name) or "").strip()
+    try:
+        v = int(raw)
+        return v if v > 0 else default
+    except ValueError:
+        return default
+
+
+ANALYZE_MAX_TOKENS = _env_int("ANTHROPIC_MAX_TOKENS", 16384)
+
 _GENERIC_LOOKUP_KEYWORDS = {
     s.casefold()
     for s in ("订单", "采购订单", "采购", "bom", "文件", "文档", "表格", "记录", "历史", "数据", "任务")
@@ -45,11 +58,65 @@ def _strip_fences(text: str) -> str:
     text = text.strip()
     if text.startswith("```"):
         nl = text.find("\n")
-        if nl != -1:
-            text = text[nl + 1:]
+        text = text[nl + 1:] if nl != -1 else text[3:]
     if text.endswith("```"):
         text = text[:-3]
     return text.strip()
+
+
+def _extract_response_text(resp) -> str:
+    for block in resp.content or []:
+        if hasattr(block, "text") and block.text:
+            return block.text
+    return ""
+
+
+def _extract_string_field(text: str, key: str, default: str = "") -> str:
+    m = re.search(rf'"{re.escape(key)}"\s*:\s*("(?:\\.|[^"\\])*")', text, re.DOTALL)
+    if not m:
+        return default
+    try:
+        return json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return default
+
+
+def _repair_truncated_json(raw_text: str) -> dict | None:
+    text = _strip_fences(raw_text)
+    rows_pos = text.find('"rows"')
+    if rows_pos == -1:
+        return None
+    array_start = text.find("[", rows_pos)
+    if array_start == -1:
+        return None
+
+    decoder = json.JSONDecoder()
+    idx = array_start + 1
+    rows: list[dict] = []
+    while idx < len(text):
+        while idx < len(text) and text[idx] in " \r\n\t,":
+            idx += 1
+        if idx >= len(text) or text[idx] == "]":
+            break
+        try:
+            obj, end = decoder.raw_decode(text, idx)
+        except json.JSONDecodeError:
+            break
+        if isinstance(obj, dict):
+            rows.append(obj)
+        idx = end
+
+    if not rows:
+        return None
+    msg = "模型输出因 max_tokens 被截断，已恢复部分完整行数据"
+    return {
+        "summary": _extract_string_field(text, "summary", msg),
+        "customer_name": _extract_string_field(text, "customer_name"),
+        "rows": rows,
+        "errors": [{"code": "LLM_OUTPUT_TRUNCATED", "message": msg}],
+        "needs_confirmation": [],
+        "warnings": [{"row": None, "message": msg}],
+    }
 
 
 def _request_json(system: str, user_text: str, max_tokens: int = 2048) -> dict:
@@ -59,7 +126,7 @@ def _request_json(system: str, user_text: str, max_tokens: int = 2048) -> dict:
         system=system,
         messages=[{"role": "user", "content": user_text}],
     )
-    return json.loads(_strip_fences(resp.content[0].text))
+    return json.loads(_strip_fences(_extract_response_text(resp)))
 
 
 # --- BOM 分析 ---
@@ -100,21 +167,37 @@ def _build_messages(file_path: str, user_instruction: str) -> list[dict]:
 
 def analyze_bom_with_llm(file_path: str, user_instruction: str = "") -> dict:
     messages = _build_messages(file_path, user_instruction)
-    log.info("调用 Claude API, model=%s, file=%s", MODEL_NAME, file_path)
+    log.info("调用 Claude API, model=%s, max_tokens=%d, file=%s", MODEL_NAME, ANALYZE_MAX_TOKENS, file_path)
 
     resp = _client().messages.create(
         model=MODEL_NAME,
-        max_tokens=8192,
+        max_tokens=ANALYZE_MAX_TOKENS,
         system=SYSTEM_PROMPT,
         messages=messages,
     )
+    raw_text = _extract_response_text(resp)
 
     try:
-        return json.loads(_strip_fences(resp.content[0].text))
+        return json.loads(_strip_fences(raw_text))
     except json.JSONDecodeError as e:
+        if getattr(resp, "stop_reason", None) == "max_tokens":
+            repaired = _repair_truncated_json(raw_text)
+            if repaired is not None:
+                log.warning("LLM 输出被截断，已恢复 %d 行: file=%s", len(repaired["rows"]), file_path)
+                return repaired
+            log.error("LLM 输出被截断且无法修复: %s", e)
+            return {
+                "summary": "模型输出被截断，且无法解析完整 JSON",
+                "customer_name": "",
+                "rows": [],
+                "errors": [{"code": "LLM_OUTPUT_TRUNCATED", "message": str(e)}],
+                "needs_confirmation": [],
+                "warnings": [{"row": None, "message": "请缩小输入范围或提高 ANTHROPIC_MAX_TOKENS"}],
+            }
         log.error("LLM JSON 解析失败: %s", e)
         return {
             "summary": "模型输出格式异常，无法解析",
+            "customer_name": "",
             "rows": [],
             "errors": [{"code": "LLM_PARSE_ERROR", "message": str(e)}],
             "needs_confirmation": [],

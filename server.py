@@ -128,7 +128,7 @@ def bom_to_excel(file_paths: str, output_name: str = "", user_instruction: str =
     excel_path = None
     if all_rows:
         try:
-            excel_path = write_admin_template(all_rows, source_file=source_label)
+            excel_path = write_admin_template(all_rows, source_file=source_label, company_name=company_name)
         except Exception as e:
             log.exception("Excel生成失败: %s", source_label)
             all_errors.append({"code": "EXCEL_WRITE_ERROR", "message": str(e)})
@@ -224,7 +224,7 @@ def bom_edit(edit_instruction: str, task_id: str = "") -> dict:
     label = base_task.source_label or base_task.company_name or base_id[:8]
     excel_path = None
     try:
-        excel_path = write_admin_template(updated_rows, source_file=f"{label}_v{next_ver}")
+        excel_path = write_admin_template(updated_rows, source_file=f"{label}_v{next_ver}", company_name=base_task.company_name or label)
     except Exception as e:
         log.exception("Excel生成失败: %s", base_id)
         errors.append({"code": "EXCEL_WRITE_ERROR", "message": str(e)})
