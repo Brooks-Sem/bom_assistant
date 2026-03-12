@@ -91,6 +91,13 @@ def bom_to_excel(file_paths: str, output_name: str = "", user_instruction: str =
         except ValueError as e:
             all_errors.append({"code": "UNSUPPORTED_FORMAT", "message": f"{fp}: {e}"})
             continue
+        except OSError as e:
+            all_errors.append({"code": "FILE_READ_ERROR", "message": f"{fp}: {e}"})
+            continue
+        except Exception as e:
+            log.exception("处理文件失败: %s", fp)
+            all_errors.append({"code": "PROCESSING_ERROR", "message": f"{fp}: {e}"})
+            continue
 
         rows = []
         for r in llm_result.get("rows", []):
@@ -118,7 +125,13 @@ def bom_to_excel(file_paths: str, output_name: str = "", user_instruction: str =
         elif len(paths) > 1 and unique_names:
             all_warnings.append({"row": None, "message": f"仅部分文件提取到客户名称；已回退使用 {source_label}"})
 
-    excel_path = write_admin_template(all_rows, source_file=source_label) if all_rows else None
+    excel_path = None
+    if all_rows:
+        try:
+            excel_path = write_admin_template(all_rows, source_file=source_label)
+        except Exception as e:
+            log.exception("Excel生成失败: %s", source_label)
+            all_errors.append({"code": "EXCEL_WRITE_ERROR", "message": str(e)})
 
     if not all_rows:
         status = "failed"
@@ -209,7 +222,12 @@ def bom_edit(edit_instruction: str, task_id: str = "") -> dict:
 
     next_ver = bom_artifact.version + 1
     label = base_task.source_label or base_task.company_name or base_id[:8]
-    excel_path = write_admin_template(updated_rows, source_file=f"{label}_v{next_ver}")
+    excel_path = None
+    try:
+        excel_path = write_admin_template(updated_rows, source_file=f"{label}_v{next_ver}")
+    except Exception as e:
+        log.exception("Excel生成失败: %s", base_id)
+        errors.append({"code": "EXCEL_WRITE_ERROR", "message": str(e)})
     status = "partial" if errors else "success"
     summary = f"对任务{base_id[:8]}应用了{len(applied)}处修改，生成版本{next_ver}。"
     result_id = str(uuid.uuid4())
