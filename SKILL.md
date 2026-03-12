@@ -1,7 +1,7 @@
 ---
 name: bom-assistant
 description: BOM/采购订单助手 — 识别并转换新文件、查询历史任务、修改已生成BOM；适用于"转换/解析/提取/查询/更正/编辑/回查"等请求。
-version: 2.3.0
+version: 2.4.0
 metadata:
   openclaw:
     emoji: "📊"
@@ -21,16 +21,9 @@ metadata:
 
 ## Quick Reference
 
-IMPORTANT: All commands must run from the skill directory. Set it first:
-
-```bash
-SKILL_DIR=/mnt/skills/user/bom_assistant
-[ -d "$SKILL_DIR" ] || SKILL_DIR="$HOME/.openclaw/skills/bom_assistant"
-```
-
-- **转换BOM**: `cd "$SKILL_DIR" && .venv/bin/python cli.py to-excel "<file_path>"`
-- **编辑BOM**: `cd "$SKILL_DIR" && .venv/bin/python cli.py edit "<instruction>"`
-- **查询历史**: `cd "$SKILL_DIR" && .venv/bin/python cli.py lookup "<query>"`
+- **转换BOM**: `cd {baseDir} && .venv/bin/python cli.py to-excel "<file_path>"`
+- **编辑BOM**: `cd {baseDir} && .venv/bin/python cli.py edit "<instruction>"`
+- **查询历史**: `cd {baseDir} && .venv/bin/python cli.py lookup "<query>"`
 
 ## to-excel — BOM 转 Excel
 
@@ -38,22 +31,22 @@ SKILL_DIR=/mnt/skills/user/bom_assistant
 
 **单个文件**:
 ```bash
-cd "$SKILL_DIR" && .venv/bin/python cli.py to-excel "/path/to/file.xlsx"
+cd {baseDir} && .venv/bin/python cli.py to-excel "/path/to/file.xlsx"
 ```
 
 **多个文件**（逗号分隔，合并到同一个Excel）:
 ```bash
-cd "$SKILL_DIR" && .venv/bin/python cli.py to-excel "/path/a.xlsx,/path/b.pdf"
+cd {baseDir} && .venv/bin/python cli.py to-excel "/path/a.xlsx,/path/b.pdf"
 ```
 
 **指定输出名前缀**:
 ```bash
-cd "$SKILL_DIR" && .venv/bin/python cli.py to-excel "/path/to/file.xlsx" "客户名_3月订单"
+cd {baseDir} && .venv/bin/python cli.py to-excel "/path/to/file.xlsx" "客户名_3月订单"
 ```
 
 **附加处理要求**:
 ```bash
-cd "$SKILL_DIR" && .venv/bin/python cli.py to-excel "/path/to/file.xlsx" "" "只提取前10行"
+cd {baseDir} && .venv/bin/python cli.py to-excel "/path/to/file.xlsx" "" "只提取前10行"
 ```
 
 不要在以下场景使用：
@@ -66,12 +59,12 @@ cd "$SKILL_DIR" && .venv/bin/python cli.py to-excel "/path/to/file.xlsx" "" "只
 
 **修改最近一次任务**:
 ```bash
-cd "$SKILL_DIR" && .venv/bin/python cli.py edit "第3行数量改成200"
+cd {baseDir} && .venv/bin/python cli.py edit "第3行数量改成200"
 ```
 
 **指定任务ID**（从lookup结果获取）:
 ```bash
-cd "$SKILL_DIR" && .venv/bin/python cli.py edit "数量改成50" "task-id-here"
+cd {baseDir} && .venv/bin/python cli.py edit "数量改成50" "task-id-here"
 ```
 
 不提供task_id时自动使用最近一次处理的任务。
@@ -85,11 +78,11 @@ cd "$SKILL_DIR" && .venv/bin/python cli.py edit "数量改成50" "task-id-here"
 当用户查询、回查、查看之前处理过的BOM记录时使用。
 
 ```bash
-cd "$SKILL_DIR" && .venv/bin/python cli.py lookup "昨天蚂蚁工场的订单"
+cd {baseDir} && .venv/bin/python cli.py lookup "昨天蚂蚁工场的订单"
 ```
 
 ```bash
-cd "$SKILL_DIR" && .venv/bin/python cli.py lookup "最近处理的BOM"
+cd {baseDir} && .venv/bin/python cli.py lookup "最近处理的BOM"
 ```
 
 不要在以下场景使用：
