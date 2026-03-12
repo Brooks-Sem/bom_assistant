@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+output/
+data/
+.venv/
+案例/
+需求
