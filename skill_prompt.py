@@ -88,16 +88,23 @@ SYSTEM_PROMPT = """\
 - "采购订单""BOM""订单列表""采购清单"等通用词不是客户名称
 - 如果无法确认真实客户名称，返回空字符串，不要猜测
 
-# 输出格式
+# 输出格式（严格遵守稀疏行格式）
 
 严格输出JSON，不输出任何其他文本。顶层必须包含 summary、customer_name、rows、errors、needs_confirmation、warnings。
 
-rows 中每个 row 对象使用**稀疏输出**：
-- 只输出有实际数据的字段
-- 值为空字符串的字段直接省略，不要输出
-- 不要输出 null 值，省略该字段即可
-- 即使两个字段取值相同（如 product_model 与 customer_part_no），也必须都输出，不可省略
-- Python 端会自动将缺失字段补齐为""
+## 稀疏行格式（MANDATORY）
+
+每个 row 对象 **仅包含有实际数据的字段**。源数据中不存在或值为空的字段 **禁止输出**。
+典型采购订单每行仅 5-9 个字段有值，row 对象中就只能有 5-9 个 key。
+Python 端会自动将缺失字段补齐为""，你无需操心缺失字段。
+
+重复字段（如 product_model 与 customer_part_no 取值相同）必须都保留，不可省略。
+
+WRONG — 包含空字段（禁止这样做）：
+{"customer_part_no": "ABC", "product_name": "螺母", "brand": "", "quantity": "10", "remark_customer": "", "remark_supply_chain": "", "customer_project_no": "", "customer_material_no": "", "inventory_feature": "", "major_category": "", "minor_category": "", "supply_org": "", "attachment_filename": "", "remark_purchase": "", "customer_expected_delivery": "", "customer_expected_price": "", "warehouse_factory": "", "sales_unit_price_tax": "", "shipment_date": ""}
+
+RIGHT — 仅保留有值字段：
+{"customer_part_no": "ABC", "product_name": "螺母", "quantity": "10"}
 
 格式：
 ```json
@@ -115,22 +122,16 @@ rows 中每个 row 对象使用**稀疏输出**：
       "remark_supply_chain": "CLJT55Q.2.100S.R150*N150（内高55~内宽100*半径150*节数150）"
     }
   ],
-  "errors": [
-    {"row": 1, "field": "brand", "code": "MISSING_VALUE", "message": "未找到品牌信息"}
-  ],
-  "needs_confirmation": [
-    {"row": 1, "field": "major_category", "reason": "表头语义不明确", "suggested_value": "传动件"}
-  ],
-  "warnings": [
-    {"row": 1, "message": "规格列通过近义表头匹配得到"}
-  ]
+  "errors": [],
+  "needs_confirmation": [],
+  "warnings": []
 }
 ```
 
 # 注意事项
 - 跳过合计行、表头行、空行
 - 每一行物料数据对应输出一个 row 对象
-- row 对象中只保留有实际数据的字段；值为""的字段直接省略
+- **禁止在 row 中包含值为""的字段** — 只输出有数据的字段
 - 表头不要求与规则示例完全一致；近义表达按语义匹配
 - 如果表头含义不明确，宁可省略该字段并记录到 needs_confirmation 或 warnings，不要猜测
 - quantity 输出为字符串格式的数值（如"12"），不带单位
