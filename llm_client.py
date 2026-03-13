@@ -14,6 +14,7 @@ from file_reader import (
     get_pdf_media_type,
     read_csv_as_text,
     read_file_as_base64,
+    read_pdf_as_text,
     read_xlsx_as_text,
 )
 from models import AdminTemplateRow, BomEditOperation, BomLookupFilters
@@ -146,6 +147,11 @@ def _build_messages(file_path: str, user_instruction: str) -> list[dict]:
         return [{"role": "user", "content": build_user_prompt(text, user_instruction)}]
 
     if file_type == "pdf":
+        pdf_text = read_pdf_as_text(file_path)
+        if pdf_text:
+            log.info("PDF 文本提取成功，走文本路径: file=%s, chars=%d", file_path, len(pdf_text))
+            return [{"role": "user", "content": build_user_prompt(pdf_text, user_instruction)}]
+        log.info("PDF 文本提取无结果，降级为 base64 上传: file=%s", file_path)
         b64 = read_file_as_base64(file_path)
         return [
             {
