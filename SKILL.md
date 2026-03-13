@@ -24,6 +24,7 @@ metadata:
 - **输出目录**: `$HOME/.openclaw/workspace/media/outbound/bom-assistant`
 - **目录结构**: `{输出目录}/{YYYY-MM}/{客户名}/admin_template_{来源}_{时间戳}.xlsx`
 - **所有命令**必须通过 `--outdir` 指定输出目录，确保文件可被 gateway 正确发送
+- **exec timeout**: 此技能处理大文件（PDF/多页Excel）时需要调用 AI 解析，耗时较长。调用 CLI 命令时 exec timeout 必须 ≥ 300 秒
 
 ## Quick Reference
 
