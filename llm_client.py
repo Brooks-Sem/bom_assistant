@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+import time
 from datetime import date
 
 import anthropic
@@ -42,6 +43,19 @@ def _env_int(name: str, default: int) -> int:
 
 
 ANALYZE_MAX_TOKENS = _env_int("ANTHROPIC_MAX_TOKENS", 32768)
+
+def _env_int_allow_zero(name: str, default: int) -> int:
+    raw = (os.getenv(name) or "").strip()
+    try:
+        v = int(raw)
+        return v if v >= 0 else default
+    except ValueError:
+        return default
+
+_API_MAX_RETRIES = _env_int_allow_zero("ANTHROPIC_MAX_RETRIES", 3)
+_API_RETRY_BASE_SECONDS = 5
+_API_RETRY_BUDGET_SECONDS = 90
+_RETRYABLE_STATUS_CODES = {429, 502, 503, 524}
 
 _GENERIC_LOOKUP_KEYWORDS = {
     s.casefold()
@@ -182,22 +196,57 @@ def analyze_bom_with_llm(file_path: str, user_instruction: str = "") -> dict:
     messages = _build_messages(file_path, user_instruction)
     log.info("调用 Claude API, model=%s, max_tokens=%d, file=%s", MODEL_NAME, ANALYZE_MAX_TOKENS, file_path)
 
-    try:
-        resp = _client().messages.create(
-            model=MODEL_NAME,
-            max_tokens=ANALYZE_MAX_TOKENS,
-            system=SYSTEM_PROMPT,
-            messages=messages,
-        )
-    except (anthropic.APITimeoutError, httpx.TimeoutException) as e:
-        log.error("Claude API 调用超时: file=%s, error=%s", file_path, e)
+    last_error: Exception | None = None
+    resp = None
+    t0 = time.monotonic()
+    for attempt in range(_API_MAX_RETRIES + 1):
+        try:
+            resp = _client().messages.create(
+                model=MODEL_NAME,
+                max_tokens=ANALYZE_MAX_TOKENS,
+                system=SYSTEM_PROMPT,
+                messages=messages,
+            )
+            break
+        except (anthropic.APITimeoutError, httpx.TimeoutException) as e:
+            last_error = e
+            wait = _API_RETRY_BASE_SECONDS * (2 ** attempt)
+        except anthropic.APIStatusError as e:
+            code = getattr(e, "status_code", None) or getattr(
+                getattr(e, "response", None), "status_code", None
+            )
+            if code not in _RETRYABLE_STATUS_CODES:
+                raise
+            last_error = e
+            wait = _API_RETRY_BASE_SECONDS * (2 ** attempt)
+            if code == 429:
+                hdrs = getattr(getattr(e, "response", None), "headers", None)
+                ra = hdrs.get("Retry-After") if hdrs else None
+                if ra:
+                    try:
+                        wait = max(wait, float(ra))
+                    except (TypeError, ValueError):
+                        pass
+
+        elapsed = time.monotonic() - t0
+        budget_left = _API_RETRY_BUDGET_SECONDS - elapsed
+        if attempt < _API_MAX_RETRIES and budget_left > wait:
+            log.warning(
+                "Claude API 调用失败，准备重试: attempt=%d/%d, wait=%.0fs, elapsed=%.0fs, file=%s, error=%s",
+                attempt + 1, _API_MAX_RETRIES, wait, elapsed, file_path, last_error,
+            )
+            time.sleep(wait)
+            continue
+
+        err_type = type(last_error).__name__ if last_error else "Unknown"
+        log.error("Claude API 调用失败: file=%s, attempts=%d, elapsed=%.0fs, error=%s", file_path, attempt + 1, elapsed, last_error)
         return {
-            "summary": "模型分析超时，未能在规定时间内返回结果",
+            "summary": f"模型分析失败（{err_type}），已重试 {attempt} 次",
             "customer_name": "",
             "rows": [],
-            "errors": [{"code": "LLM_TIMEOUT", "message": f"API 请求超时: {e}"}],
+            "errors": [{"code": "LLM_API_ERROR", "message": f"API 请求失败（已重试 {attempt} 次）: {last_error}"}],
             "needs_confirmation": [],
-            "warnings": [{"row": None, "message": "文件行数较多时建议分批处理或提高超时设置"}],
+            "warnings": [{"row": None, "message": "请稍后重试，或联系管理员检查 API 配置"}],
         }
     raw_text = _extract_response_text(resp)
 
