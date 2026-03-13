@@ -90,44 +90,39 @@ SYSTEM_PROMPT = """\
 
 # 输出格式
 
-严格输出JSON，不输出任何其他文本。格式：
+严格输出JSON，不输出任何其他文本。顶层必须包含 summary、customer_name、rows、errors、needs_confirmation、warnings。
+
+rows 中每个 row 对象使用**稀疏输出**：
+- 只输出有实际数据的字段
+- 值为空字符串的字段直接省略，不要输出
+- 不要输出 null 值，省略该字段即可
+- 即使两个字段取值相同（如 product_model 与 customer_part_no），也必须都输出，不可省略
+- Python 端会自动将缺失字段补齐为""
+
+格式：
 ```json
 {
   "summary": "简要分析总结（1-2句话）",
-  "customer_name": "",
+  "customer_name": "蚂蚁工场",
   "rows": [
     {
-      "customer_part_no": "",
-      "customer_product_name": "",
-      "product_model": "",
-      "product_name": "",
-      "brand": "",
-      "quantity": "",
-      "remark_customer": "",
-      "remark_supply_chain": "",
-      "customer_project_no": "",
-      "customer_material_no": "",
-      "inventory_feature": "",
-      "major_category": "",
-      "minor_category": "",
-      "supply_org": "",
-      "attachment_filename": "",
-      "remark_purchase": "",
-      "customer_expected_delivery": "",
-      "customer_expected_price": "",
-      "warehouse_factory": "",
-      "sales_unit_price_tax": "",
-      "shipment_date": ""
+      "customer_part_no": "CLJT55Q.2.100S.R150*N150",
+      "customer_product_name": "坦克链（内高55~内宽100*半径150*节数150）",
+      "product_model": "CLJT55Q.2.100S.R150*N150",
+      "product_name": "坦克链（内高55~内宽100*半径150*节数150）",
+      "brand": "怡合达",
+      "quantity": "12",
+      "remark_supply_chain": "CLJT55Q.2.100S.R150*N150（内高55~内宽100*半径150*节数150）"
     }
   ],
   "errors": [
-    {"row": 1, "field": "字段名", "code": "MISSING_VALUE", "message": "描述"}
+    {"row": 1, "field": "brand", "code": "MISSING_VALUE", "message": "未找到品牌信息"}
   ],
   "needs_confirmation": [
-    {"row": 1, "field": "字段名", "reason": "原因", "suggested_value": "建议值"}
+    {"row": 1, "field": "major_category", "reason": "表头语义不明确", "suggested_value": "传动件"}
   ],
   "warnings": [
-    {"row": 1, "message": "描述"}
+    {"row": 1, "message": "规格列通过近义表头匹配得到"}
   ]
 }
 ```
@@ -135,9 +130,9 @@ SYSTEM_PROMPT = """\
 # 注意事项
 - 跳过合计行、表头行、空行
 - 每一行物料数据对应输出一个 row 对象
-- 如果某字段在源数据中不存在，填空字符串""
+- row 对象中只保留有实际数据的字段；值为""的字段直接省略
 - 表头不要求与规则示例完全一致；近义表达按语义匹配
-- 如果表头含义不明确，宁可留空并记录到 needs_confirmation 或 warnings，不要猜测
+- 如果表头含义不明确，宁可省略该字段并记录到 needs_confirmation 或 warnings，不要猜测
 - quantity 输出为字符串格式的数值（如"12"），不带单位
 - customer_expected_price 输出为字符串格式的数值（如"4.5"），不带货币符号
 - 如果发现数据异常（缺失关键字段、格式不一致等），记录到 errors 或 warnings 中

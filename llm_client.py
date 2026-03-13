@@ -5,6 +5,7 @@ import re
 from datetime import date
 
 import anthropic
+import httpx
 from dotenv import load_dotenv
 
 from file_reader import (
@@ -39,7 +40,7 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-ANALYZE_MAX_TOKENS = _env_int("ANTHROPIC_MAX_TOKENS", 16384)
+ANALYZE_MAX_TOKENS = _env_int("ANTHROPIC_MAX_TOKENS", 32768)
 
 _GENERIC_LOOKUP_KEYWORDS = {
     s.casefold()
@@ -47,10 +48,16 @@ _GENERIC_LOOKUP_KEYWORDS = {
 }
 
 
+_http_client = httpx.Client(
+    timeout=httpx.Timeout(connect=30.0, read=600.0, write=120.0, pool=30.0),
+)
+
+
 def _client() -> anthropic.Anthropic:
     return anthropic.Anthropic(
         base_url=BASE_URL,
         default_headers={"User-Agent": "claude-code/1.0"},
+        http_client=_http_client,
     )
 
 
@@ -169,12 +176,23 @@ def analyze_bom_with_llm(file_path: str, user_instruction: str = "") -> dict:
     messages = _build_messages(file_path, user_instruction)
     log.info("调用 Claude API, model=%s, max_tokens=%d, file=%s", MODEL_NAME, ANALYZE_MAX_TOKENS, file_path)
 
-    resp = _client().messages.create(
-        model=MODEL_NAME,
-        max_tokens=ANALYZE_MAX_TOKENS,
-        system=SYSTEM_PROMPT,
-        messages=messages,
-    )
+    try:
+        resp = _client().messages.create(
+            model=MODEL_NAME,
+            max_tokens=ANALYZE_MAX_TOKENS,
+            system=SYSTEM_PROMPT,
+            messages=messages,
+        )
+    except (anthropic.APITimeoutError, httpx.TimeoutException) as e:
+        log.error("Claude API 调用超时: file=%s, error=%s", file_path, e)
+        return {
+            "summary": "模型分析超时，未能在规定时间内返回结果",
+            "customer_name": "",
+            "rows": [],
+            "errors": [{"code": "LLM_TIMEOUT", "message": f"API 请求超时: {e}"}],
+            "needs_confirmation": [],
+            "warnings": [{"row": None, "message": "文件行数较多时建议分批处理或提高超时设置"}],
+        }
     raw_text = _extract_response_text(resp)
 
     try:
