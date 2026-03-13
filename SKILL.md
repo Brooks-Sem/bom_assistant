@@ -1,7 +1,7 @@
 ---
 name: bom-assistant
 description: BOM/采购订单助手 — 识别并转换新文件、查询历史任务、修改已生成BOM；适用于"转换/解析/提取/查询/更正/编辑/回查"等请求。
-version: 2.4.0
+version: 2.5.0
 metadata:
   openclaw:
     emoji: "📊"
@@ -19,10 +19,16 @@ metadata:
 
 将采购订单/BOM文件转换为标准化Excel、修改已生成的BOM、查询历史处理记录。
 
+## 输出配置
+
+- **输出目录**: `$HOME/.openclaw/workspace/media/outbound/bom-assistant`
+- **目录结构**: `{输出目录}/{YYYY-MM}/{客户名}/admin_template_{来源}_{时间戳}.xlsx`
+- **所有命令**必须通过 `--outdir` 指定输出目录，确保文件可被 gateway 正确发送
+
 ## Quick Reference
 
-- **转换BOM**: `cd {baseDir} && .venv/bin/python cli.py to-excel "<file_path>"`
-- **编辑BOM**: `cd {baseDir} && .venv/bin/python cli.py edit "<instruction>"`
+- **转换BOM**: `cd {baseDir} && .venv/bin/python cli.py to-excel "<file_path>" --outdir "$HOME/.openclaw/workspace/media/outbound/bom-assistant"`
+- **编辑BOM**: `cd {baseDir} && .venv/bin/python cli.py edit "<instruction>" --outdir "$HOME/.openclaw/workspace/media/outbound/bom-assistant"`
 - **查询历史**: `cd {baseDir} && .venv/bin/python cli.py lookup "<query>"`
 
 ## to-excel — BOM 转 Excel
@@ -31,22 +37,22 @@ metadata:
 
 **单个文件**:
 ```bash
-cd {baseDir} && .venv/bin/python cli.py to-excel "/path/to/file.xlsx"
+cd {baseDir} && .venv/bin/python cli.py to-excel "/path/to/file.xlsx" --outdir "$HOME/.openclaw/workspace/media/outbound/bom-assistant"
 ```
 
 **多个文件**（逗号分隔，合并到同一个Excel）:
 ```bash
-cd {baseDir} && .venv/bin/python cli.py to-excel "/path/a.xlsx,/path/b.pdf"
+cd {baseDir} && .venv/bin/python cli.py to-excel "/path/a.xlsx,/path/b.pdf" --outdir "$HOME/.openclaw/workspace/media/outbound/bom-assistant"
 ```
 
 **指定输出名前缀**:
 ```bash
-cd {baseDir} && .venv/bin/python cli.py to-excel "/path/to/file.xlsx" "客户名_3月订单"
+cd {baseDir} && .venv/bin/python cli.py to-excel "/path/to/file.xlsx" "客户名_3月订单" --outdir "$HOME/.openclaw/workspace/media/outbound/bom-assistant"
 ```
 
 **附加处理要求**:
 ```bash
-cd {baseDir} && .venv/bin/python cli.py to-excel "/path/to/file.xlsx" "" "只提取前10行"
+cd {baseDir} && .venv/bin/python cli.py to-excel "/path/to/file.xlsx" "" "只提取前10行" --outdir "$HOME/.openclaw/workspace/media/outbound/bom-assistant"
 ```
 
 不要在以下场景使用：
@@ -59,12 +65,12 @@ cd {baseDir} && .venv/bin/python cli.py to-excel "/path/to/file.xlsx" "" "只提
 
 **修改最近一次任务**:
 ```bash
-cd {baseDir} && .venv/bin/python cli.py edit "第3行数量改成200"
+cd {baseDir} && .venv/bin/python cli.py edit "第3行数量改成200" --outdir "$HOME/.openclaw/workspace/media/outbound/bom-assistant"
 ```
 
 **指定任务ID**（从lookup结果获取）:
 ```bash
-cd {baseDir} && .venv/bin/python cli.py edit "数量改成50" "task-id-here"
+cd {baseDir} && .venv/bin/python cli.py edit "数量改成50" "task-id-here" --outdir "$HOME/.openclaw/workspace/media/outbound/bom-assistant"
 ```
 
 不提供task_id时自动使用最近一次处理的任务。

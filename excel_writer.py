@@ -7,12 +7,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 TEMPLATE_PATH = Path(__file__).parent / "admin_template.xlsx"
-
-_OPENCLAW_OUTBOUND = Path.home() / ".openclaw" / "workspace" / "media" / "outbound" / "bom-assistant"
-_FALLBACK_OUTPUT = Path(__file__).resolve().parent / "output"
-OUTPUT_ROOT = Path(os.getenv("BOM_OUTPUT_DIR", "")).resolve() if os.getenv("BOM_OUTPUT_DIR") else (
-    _OPENCLAW_OUTBOUND if _OPENCLAW_OUTBOUND.parent.exists() else _FALLBACK_OUTPUT
-)
+_DEFAULT_OUTPUT = str(Path(__file__).resolve().parent / "output")
 
 FIELD_KEYS = [
     "customer_part_no",
@@ -64,7 +59,7 @@ def write_admin_template(
     output_dir: str = "",
     company_name: str = "",
 ) -> str:
-    root = Path(output_dir) if output_dir else OUTPUT_ROOT
+    root = Path(output_dir).resolve() if output_dir else Path(_DEFAULT_OUTPUT)
     month = datetime.now().strftime("%Y-%m")
     company_seg = _sanitize_segment(company_name, fallback=Path(source_file).stem or "unknown")
     target_dir = root / month / company_seg

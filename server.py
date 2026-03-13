@@ -59,7 +59,7 @@ def _persist_outputs(task_id: str, rows: list[dict], summary: str, excel_path: s
 # --- 工具1：BOM 转 Excel ---
 
 @mcp.tool()
-def bom_to_excel(file_paths: str, output_name: str = "", user_instruction: str = "") -> dict:
+def bom_to_excel(file_paths: str, output_name: str = "", user_instruction: str = "", output_dir: str = "") -> dict:
     """将一个或多个采购订单/BOM文件转换为标准化的admin_template Excel。
 
     支持 xlsx、csv、pdf、图片格式。多个文件用逗号分隔，结果合并到同一个Excel。
@@ -68,6 +68,7 @@ def bom_to_excel(file_paths: str, output_name: str = "", user_instruction: str =
         file_paths: 输入文件路径，多个文件用逗号分隔
         output_name: 可选的输出文件名前缀（如"烽禾升_3月订单"）
         user_instruction: 可选的附加处理要求
+        output_dir: 可选的输出目录
     """
     paths = [p.strip() for p in file_paths.split(",") if p.strip()]
     if not paths:
@@ -128,7 +129,7 @@ def bom_to_excel(file_paths: str, output_name: str = "", user_instruction: str =
     excel_path = None
     if all_rows:
         try:
-            excel_path = write_admin_template(all_rows, source_file=source_label, company_name=company_name)
+            excel_path = write_admin_template(all_rows, source_file=source_label, company_name=company_name, output_dir=output_dir)
         except Exception as e:
             log.exception("Excel生成失败: %s", source_label)
             all_errors.append({"code": "EXCEL_WRITE_ERROR", "message": str(e)})
@@ -173,7 +174,7 @@ def bom_to_excel(file_paths: str, output_name: str = "", user_instruction: str =
 # --- 工具2：BOM 编辑 ---
 
 @mcp.tool()
-def bom_edit(edit_instruction: str, task_id: str = "") -> dict:
+def bom_edit(edit_instruction: str, task_id: str = "", output_dir: str = "") -> dict:
     """修改已有的BOM数据并重新生成Excel。
 
     通过自然语言描述修改内容，系统自动定位行和字段进行修改。
@@ -181,6 +182,7 @@ def bom_edit(edit_instruction: str, task_id: str = "") -> dict:
     Args:
         edit_instruction: 修改指令（如"第3行数量改成200"、"把怡合达的坦克链数量改为50"）
         task_id: 可选，指定要修改的任务ID。不提供则使用最近一次任务
+        output_dir: 可选的输出目录
     """
     base_id = _resolve_task_id(task_id or None)
     base_task = _tasks.get(base_id)
@@ -224,7 +226,7 @@ def bom_edit(edit_instruction: str, task_id: str = "") -> dict:
     label = base_task.source_label or base_task.company_name or base_id[:8]
     excel_path = None
     try:
-        excel_path = write_admin_template(updated_rows, source_file=f"{label}_v{next_ver}", company_name=base_task.company_name or label)
+        excel_path = write_admin_template(updated_rows, source_file=f"{label}_v{next_ver}", company_name=base_task.company_name or label, output_dir=output_dir)
     except Exception as e:
         log.exception("Excel生成失败: %s", base_id)
         errors.append({"code": "EXCEL_WRITE_ERROR", "message": str(e)})

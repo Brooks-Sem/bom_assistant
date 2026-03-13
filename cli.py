@@ -8,8 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 USAGE = (
     "Usage:\n"
-    '  cli.py to-excel <file_paths> [output_name] [instruction]\n'
-    '  cli.py edit     <instruction> [task_id]\n'
+    '  cli.py to-excel <file_paths> [output_name] [instruction] [--outdir DIR]\n'
+    '  cli.py edit     <instruction> [task_id] [--outdir DIR]\n'
     '  cli.py lookup   <query>'
 )
 
@@ -17,6 +17,18 @@ USAGE = (
 def _fail(message: str) -> None:
     print(json.dumps({"status": "failed", "error": message}, ensure_ascii=False))
     sys.exit(1)
+
+
+def _pop_flag(args: list[str], flag: str) -> str | None:
+    try:
+        idx = args.index(flag)
+    except ValueError:
+        return None
+    if idx + 1 >= len(args):
+        _fail(f"{flag} requires a value")
+    val = args[idx + 1]
+    del args[idx:idx + 2]
+    return val
 
 
 def _load():
@@ -45,29 +57,32 @@ def main() -> None:
         print(USAGE, file=sys.stderr)
         sys.exit(0 if args else 1)
 
-    cmd, rest = args[0], args[1:]
+    cmd = args.pop(0)
+    outdir = _pop_flag(args, "--outdir") or ""
     bom_to_excel, bom_edit, bom_lookup = _load()
 
     try:
         if cmd == "to-excel":
-            if not rest:
+            if not args:
                 _fail("to-excel requires <file_paths>")
             result = bom_to_excel(
-                file_paths=rest[0],
-                output_name=rest[1] if len(rest) > 1 else "",
-                user_instruction=rest[2] if len(rest) > 2 else "",
+                file_paths=args[0],
+                output_name=args[1] if len(args) > 1 else "",
+                user_instruction=args[2] if len(args) > 2 else "",
+                output_dir=outdir,
             )
         elif cmd == "edit":
-            if not rest:
+            if not args:
                 _fail("edit requires <instruction>")
             result = bom_edit(
-                edit_instruction=rest[0],
-                task_id=rest[1] if len(rest) > 1 else "",
+                edit_instruction=args[0],
+                task_id=args[1] if len(args) > 1 else "",
+                output_dir=outdir,
             )
         elif cmd == "lookup":
-            if not rest:
+            if not args:
                 _fail("lookup requires <query>")
-            result = bom_lookup(query=" ".join(rest))
+            result = bom_lookup(query=" ".join(args))
         else:
             _fail(f"Unknown command: {cmd}")
     except Exception as e:
