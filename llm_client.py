@@ -145,7 +145,7 @@ def _request_json(system: str, user_text: str, max_tokens: int = 2048) -> dict:
     resp = _client().messages.create(
         model=MODEL_NAME,
         max_tokens=max_tokens,
-        system=system,
+        system=[{"type": "text", "text": system}],
         messages=[{"role": "user", "content": user_text}],
     )
     return json.loads(_strip_fences(_extract_response_text(resp)))
@@ -204,7 +204,7 @@ def analyze_bom_with_llm(file_path: str, user_instruction: str = "") -> dict:
             resp = _client().messages.create(
                 model=MODEL_NAME,
                 max_tokens=ANALYZE_MAX_TOKENS,
-                system=SYSTEM_PROMPT,
+                system=[{"type": "text", "text": SYSTEM_PROMPT}],
                 messages=messages,
             )
             break
