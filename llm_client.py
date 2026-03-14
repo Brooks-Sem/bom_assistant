@@ -194,21 +194,22 @@ def _build_messages(file_path: str, user_instruction: str) -> list[dict]:
 
 def analyze_bom_with_llm(file_path: str, user_instruction: str = "") -> dict:
     messages = _build_messages(file_path, user_instruction)
-    log.info("调用 Claude API, model=%s, max_tokens=%d, file=%s", MODEL_NAME, ANALYZE_MAX_TOKENS, file_path)
+    log.info("调用 Claude API (streaming), model=%s, max_tokens=%d, file=%s", MODEL_NAME, ANALYZE_MAX_TOKENS, file_path)
 
     last_error: Exception | None = None
     resp = None
     t0 = time.monotonic()
     for attempt in range(_API_MAX_RETRIES + 1):
         try:
-            resp = _client().messages.create(
+            with _client().messages.stream(
                 model=MODEL_NAME,
                 max_tokens=ANALYZE_MAX_TOKENS,
                 system=[{"type": "text", "text": SYSTEM_PROMPT}],
                 messages=messages,
-            )
+            ) as stream:
+                resp = stream.get_final_message()
             break
-        except (anthropic.APITimeoutError, httpx.TimeoutException) as e:
+        except (anthropic.APITimeoutError, anthropic.APIConnectionError, httpx.TimeoutException) as e:
             last_error = e
             wait = _API_RETRY_BASE_SECONDS * (2 ** attempt)
         except anthropic.APIStatusError as e:
