@@ -1,4 +1,3 @@
-import os
 import re
 import shutil
 from datetime import datetime
@@ -35,6 +34,13 @@ FIELD_KEYS = [
 
 _FS_INVALID_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 _MULTI_UNDERSCORE = re.compile(r"_+")
+_MAX_SEGMENT_CHARS = 50
+_OPENCLAW_UUID_RE = re.compile(r"---[0-9a-f][-0-9a-f]*$", re.IGNORECASE)
+
+
+def _strip_openclaw_suffix(name: str) -> str:
+    m = _OPENCLAW_UUID_RE.search(name)
+    return name[:m.start()].rstrip("_") if m else name
 
 
 def _sanitize_segment(value: str, fallback: str = "unknown") -> str:
@@ -44,11 +50,12 @@ def _sanitize_segment(value: str, fallback: str = "unknown") -> str:
     cleaned = _MULTI_UNDERSCORE.sub("_", cleaned).strip("_")
     if not cleaned:
         cleaned = _MULTI_UNDERSCORE.sub("_", _FS_INVALID_CHARS.sub("_", fallback).strip("_. ")) or "unknown"
-    return cleaned[:80]
+    return cleaned[:_MAX_SEGMENT_CHARS]
 
 
-def _build_output_name(source_file: str) -> str:
-    stem = _sanitize_segment(Path(source_file).stem, fallback="bom")
+def _build_output_name(source_file: str, label: str = "") -> str:
+    raw = label.strip() if label else _strip_openclaw_suffix(Path(source_file).stem)
+    stem = _sanitize_segment(raw, fallback="bom")
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
     return f"admin_template_{stem}_{ts}.xlsx"
 
@@ -61,11 +68,12 @@ def write_admin_template(
 ) -> str:
     root = Path(output_dir).resolve() if output_dir else Path(_DEFAULT_OUTPUT)
     month = datetime.now().strftime("%Y-%m")
-    company_seg = _sanitize_segment(company_name, fallback=Path(source_file).stem or "unknown")
+    fallback_stem = _strip_openclaw_suffix(Path(source_file).stem) or "unknown"
+    company_seg = _sanitize_segment(company_name, fallback=fallback_stem)
     target_dir = root / month / company_seg
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    output_name = _build_output_name(source_file)
+    output_name = _build_output_name(source_file, label=company_name)
     output_path = (target_dir / output_name).resolve()
     shutil.copy2(str(TEMPLATE_PATH), str(output_path))
 

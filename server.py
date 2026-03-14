@@ -4,7 +4,7 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-from excel_writer import write_admin_template
+from excel_writer import write_admin_template, _strip_openclaw_suffix
 from file_reader import detect_file_type
 from llm_client import analyze_bom_with_llm, parse_edit_instruction, parse_lookup_query
 from models import AdminTemplateRow, AnalyzeBomResult
@@ -22,6 +22,16 @@ _last_task_id: str | None = None
 def _remember(task_id: str) -> None:
     global _last_task_id
     _last_task_id = task_id
+
+
+def _verify_excel(path: str | None, errors: list[dict]) -> str | None:
+    if not path:
+        return None
+    if Path(path).is_file():
+        return path
+    log.error("Excel 文件不存在，阻止返回路径: %s", path)
+    errors.append({"code": "EXCEL_MISSING", "message": f"文件生成后未找到: {Path(path).name}"})
+    return None
 
 
 def _resolve_task_id(task_id: str | None) -> str:
@@ -82,7 +92,7 @@ def bom_to_excel(file_paths: str, output_name: str = "", user_instruction: str =
     all_warnings: list[dict] = []
     summaries: list[str] = []
     customer_names: list[str] = []
-    source_label = output_name.strip() or Path(paths[0]).stem
+    source_label = output_name.strip() or _strip_openclaw_suffix(Path(paths[0]).stem)
 
     for i, fp in enumerate(paths, 1):
         log.info("分析文件 [%d/%d]: %s", i, len(paths), fp)
@@ -133,6 +143,7 @@ def bom_to_excel(file_paths: str, output_name: str = "", user_instruction: str =
         except Exception as e:
             log.exception("Excel生成失败: %s", source_label)
             all_errors.append({"code": "EXCEL_WRITE_ERROR", "message": str(e)})
+    excel_path = _verify_excel(excel_path, all_errors)
 
     if not all_rows:
         status = "failed"
@@ -230,6 +241,7 @@ def bom_edit(edit_instruction: str, task_id: str = "", output_dir: str = "") -> 
     except Exception as e:
         log.exception("Excel生成失败: %s", base_id)
         errors.append({"code": "EXCEL_WRITE_ERROR", "message": str(e)})
+    excel_path = _verify_excel(excel_path, errors)
     status = "partial" if errors else "success"
     summary = f"对任务{base_id[:8]}应用了{len(applied)}处修改，生成版本{next_ver}。"
     result_id = str(uuid.uuid4())
