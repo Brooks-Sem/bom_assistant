@@ -4,7 +4,7 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-from excel_writer import write_admin_template, _strip_openclaw_suffix
+from excel_writer import write_admin_template, _extract_order_no, _strip_openclaw_suffix
 from file_reader import detect_file_type
 from llm_client import analyze_bom_with_llm, parse_edit_instruction, parse_lookup_query
 from models import AdminTemplateRow, AnalyzeBomResult
@@ -92,7 +92,8 @@ def bom_to_excel(file_paths: str, output_name: str = "", user_instruction: str =
     all_warnings: list[dict] = []
     summaries: list[str] = []
     customer_names: list[str] = []
-    source_label = output_name.strip() or _strip_openclaw_suffix(Path(paths[0]).stem)
+    raw_stem = _strip_openclaw_suffix(Path(paths[0]).stem)
+    source_label = output_name.strip() or _extract_order_no(raw_stem) or raw_stem
 
     for i, fp in enumerate(paths, 1):
         log.info("分析文件 [%d/%d]: %s", i, len(paths), fp)

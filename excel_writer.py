@@ -36,11 +36,17 @@ _FS_INVALID_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 _MULTI_UNDERSCORE = re.compile(r"_+")
 _MAX_SEGMENT_CHARS = 50
 _OPENCLAW_UUID_RE = re.compile(r"---[0-9a-f][-0-9a-f]*$", re.IGNORECASE)
+_ORDER_NO_RE = re.compile(r"[A-Z]{2,5}\d{6,15}")
 
 
 def _strip_openclaw_suffix(name: str) -> str:
     m = _OPENCLAW_UUID_RE.search(name)
     return name[:m.start()].rstrip("_") if m else name
+
+
+def _extract_order_no(name: str) -> str:
+    m = _ORDER_NO_RE.search(name)
+    return m.group() if m else ""
 
 
 def _sanitize_segment(value: str, fallback: str = "unknown") -> str:
@@ -53,8 +59,17 @@ def _sanitize_segment(value: str, fallback: str = "unknown") -> str:
     return cleaned[:_MAX_SEGMENT_CHARS]
 
 
-def _build_output_name(source_file: str, label: str = "") -> str:
-    raw = label.strip() if label else _strip_openclaw_suffix(Path(source_file).stem)
+def _build_output_name(source_file: str, company_name: str = "") -> str:
+    order_no = _extract_order_no(Path(source_file).stem)
+    company = company_name.strip()
+    if order_no and company:
+        raw = f"{order_no}_{company}"
+    elif order_no:
+        raw = order_no
+    elif company:
+        raw = company
+    else:
+        raw = _strip_openclaw_suffix(Path(source_file).stem)
     stem = _sanitize_segment(raw, fallback="bom")
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
     return f"admin_template_{stem}_{ts}.xlsx"
@@ -73,7 +88,7 @@ def write_admin_template(
     target_dir = root / month / company_seg
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    output_name = _build_output_name(source_file, label=company_name)
+    output_name = _build_output_name(source_file, company_name=company_name)
     output_path = (target_dir / output_name).resolve()
     shutil.copy2(str(TEMPLATE_PATH), str(output_path))
 
