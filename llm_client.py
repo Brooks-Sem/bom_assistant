@@ -198,6 +198,7 @@ def analyze_bom_with_llm(file_path: str, user_instruction: str = "") -> dict:
 
     last_error: Exception | None = None
     resp = None
+    stream_text = ""
     t0 = time.monotonic()
     for attempt in range(_API_MAX_RETRIES + 1):
         try:
@@ -207,6 +208,7 @@ def analyze_bom_with_llm(file_path: str, user_instruction: str = "") -> dict:
                 system=[{"type": "text", "text": SYSTEM_PROMPT}],
                 messages=messages,
             ) as stream:
+                stream_text = stream.get_final_text()
                 resp = stream.get_final_message()
             break
         except (anthropic.APITimeoutError, anthropic.APIConnectionError, httpx.TimeoutException) as e:
@@ -249,7 +251,22 @@ def analyze_bom_with_llm(file_path: str, user_instruction: str = "") -> dict:
             "needs_confirmation": [],
             "warnings": [{"row": None, "message": "请稍后重试，或联系管理员检查 API 配置"}],
         }
-    raw_text = _extract_response_text(resp)
+    raw_text = stream_text or _extract_response_text(resp)
+    if not raw_text:
+        block_types = [type(b).__name__ for b in (resp.content or [])]
+        log.error(
+            "LLM 返回空内容: stop_reason=%s, blocks=%s, model=%s, file=%s",
+            getattr(resp, "stop_reason", None), block_types,
+            getattr(resp, "model", None), file_path,
+        )
+        return {
+            "summary": "模型返回空内容",
+            "customer_name": "",
+            "rows": [],
+            "errors": [{"code": "LLM_EMPTY_RESPONSE", "message": f"stop_reason={getattr(resp, 'stop_reason', None)}, blocks={block_types}"}],
+            "needs_confirmation": [],
+            "warnings": [],
+        }
 
     try:
         return json.loads(_strip_fences(raw_text))
