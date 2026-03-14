@@ -118,9 +118,21 @@ def bom_to_excel(file_paths: str, output_name: str = "", user_instruction: str =
             except Exception:
                 all_warnings.append({"row": None, "message": f"跳过无效行数据: {str(r)[:100]}"})
         all_rows.extend(rows)
-        all_errors.extend(llm_result.get("errors", []))
-        all_confirmations.extend(llm_result.get("needs_confirmation", []))
-        all_warnings.extend(llm_result.get("warnings", []))
+        for e in llm_result.get("errors", []):
+            if isinstance(e, dict) and "message" in e:
+                all_errors.append({"code": e.get("code", "LLM_ERROR"), "message": e["message"]})
+            else:
+                all_errors.append({"code": "LLM_ERROR", "message": str(e)[:200]})
+        for c in llm_result.get("needs_confirmation", []):
+            if isinstance(c, dict) and "reason" in c:
+                all_confirmations.append(c)
+            else:
+                all_confirmations.append({"reason": str(c)[:200]})
+        for w in llm_result.get("warnings", []):
+            if isinstance(w, dict) and "message" in w:
+                all_warnings.append({"row": w.get("row"), "message": w["message"]})
+            else:
+                all_warnings.append({"row": None, "message": str(w)[:200]})
         if llm_result.get("summary"):
             summaries.append(llm_result["summary"])
         cn = str(llm_result.get("customer_name", "")).strip()
