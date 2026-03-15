@@ -35,13 +35,46 @@ FIELD_KEYS = [
 _FS_INVALID_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 _MULTI_UNDERSCORE = re.compile(r"_+")
 _MAX_SEGMENT_CHARS = 50
+_HEX_PAIR = re.compile(r"[0-9A-Fa-f]{2}")
 _OPENCLAW_UUID_RE = re.compile(r"---[0-9a-f][-0-9a-f]*$", re.IGNORECASE)
 _ORDER_NO_RE = re.compile(r"[A-Z]{2,5}\d{6,15}")
 
 
+def _try_decode_hex_name(name: str) -> str:
+    segments = name.split("_")
+    rebuilt: list[str] = []
+    decoded_any = False
+    i = 0
+    while i < len(segments):
+        if not _HEX_PAIR.fullmatch(segments[i]):
+            rebuilt.append(segments[i])
+            i += 1
+            continue
+        start = i
+        while i < len(segments) and _HEX_PAIR.fullmatch(segments[i]):
+            i += 1
+        run = segments[start:i]
+        if len(run) < 3:
+            rebuilt.extend(run)
+            continue
+        try:
+            decoded = bytes.fromhex("".join(run)).decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
+            rebuilt.extend(run)
+            continue
+        if any(ord(c) > 127 and c.isprintable() for c in decoded):
+            rebuilt.append(decoded)
+            decoded_any = True
+        else:
+            rebuilt.extend(run)
+    result = "_".join(rebuilt)
+    return result if decoded_any and result else name
+
+
 def _strip_openclaw_suffix(name: str) -> str:
     m = _OPENCLAW_UUID_RE.search(name)
-    return name[:m.start()].rstrip("_") if m else name
+    stripped = name[:m.start()].rstrip("_") if m else name
+    return _try_decode_hex_name(stripped)
 
 
 def _extract_order_no(name: str) -> str:
