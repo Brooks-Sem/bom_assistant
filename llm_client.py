@@ -78,6 +78,9 @@ def _client() -> anthropic.Anthropic:
 
 def _strip_fences(text: str) -> str:
     text = text.strip()
+    m = re.search(r"```(?:json)?\s*\n(.+?)```", text, re.DOTALL)
+    if m:
+        return m.group(1).strip()
     if text.startswith("```"):
         nl = text.find("\n")
         text = text[nl + 1:] if nl != -1 else text[3:]
